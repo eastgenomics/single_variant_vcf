@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import pandas as pd
 import re
 import sys
+import pandas as pd
 
-# Read in input excel
-df = pd.read_excel(sys.argv[1], dtype=str, engine='odf')
+df = pd.read_excel(sys.argv[1], dtype=str, engine="odf")
 
 # Define static elements of the VCF
-static_header = '''##fileformat=VCFv4.2
+VCF_HEADER = """##fileformat=VCFv4.2
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##INFO=<ID=V1_evidence,Number=.,Type=String,Description="Free text from scientists">
 ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
@@ -37,84 +35,69 @@ static_header = '''##fileformat=VCFv4.2
 ##contig=<ID=22,length=51304566,assembly=b37>
 ##contig=<ID=X,length=155270560,assembly=b37>
 ##contig=<ID=Y,length=59373566,assembly=b37>
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT'''
-id_val = qual = filter_val = "."
-format_val = "GT:AD"
-ad = "0,0"
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT"""
+ID = QUAL = FILTER = "."
+FORMAT = "GT:AD"
+AD = "0,0"
 
-# Regex pattern for extracting chrom,pos,ref,alt  
-var_pattern = "(1[0-9]?|2[0-2]?|X|Y):(\d+):([ACGT]+):([ACGT]+)"
+# Regex pattern for extracting chrom,pos,ref,alt
+PATTERN = r"(1[0-9]?|2[0-2]?|X|Y):(\d+):([ACGT]+):([ACGT]+)"
 
 # Loop and parse out variants in the excel and export in VCF format
-for index,row in df.iterrows():
-    
-    if pd.isna(row['Participant_ID']):
-        print("The sample ID could not be found for row index: {}".format(index))
+for index, row in df.iterrows():
+
+    if pd.isna(row["Participant_ID"]):
+        print(f"The sample ID could not be found for row index: {index}")
         continue
-    
-    sample_id = row['Participant_ID'].strip()
-    vcf_header = "{}\t{}\n".format(static_header,sample_id)
-    
-    variant = row['V1'].strip()
-    result = re.search(var_pattern,variant)
+
+    sample_id = row["Participant_ID"].strip()
+    vcf_header = f"{VCF_HEADER}\t{sample_id}\n"
+
+    variant = row["V1"].strip()
+    result = re.search(PATTERN, variant)
     try:
         chrom = result[1]
     except TypeError:
-        print("CHROM could not be found for row index: {}".format(index))
+        print(f"CHROM could not be found for row index: {index}")
         continue
-    
     try:
         pos = result[2]
     except TypeError:
-        print("POS could not be found for row index: {}".format(index))
+        print(f"POS could not be found for row index: {index}")
         continue
-    
+
     try:
         ref = result[3]
     except TypeError:
-        print("REF could not be found for row index: {}".format(index))
+        print(f"REF could not be found for row index: {index}")
         continue
-    
+
     try:
         alt = result[4]
     except TypeError:
-        print("ALT could not be found for row index: {}".format(index))
+        print(f"ALT could not be found for row index: {index}")
         continue
-    
+
     if len(ref) > 1 and len(alt) > 1:
-        print("REF/ALT are not valid for row index: {}".format(index))
-        continue    
-    
-    zygos = row['V1_zygosity'].strip()
-    if zygos in ["het", "Het", "heterozygous", "Heterozygous"]:
-        gt = "0/1"
-    elif zygos in ["hom", "Hom", "homozygous", "Homozygous"]:
-        gt = "1/1"
-    else:
-        print("Zygosity is not valid for row index: {}".format(index))
+        print(f"REF/ALT are not valid for row index: {index}")
         continue
-    
-    gt_ad = "{}:{}".format(gt,ad)
-    
-    info = "V1_evidence=\"{}\"".format(row['V1_evidence'])
-    
-    record = "\t".join([chrom,pos,id_val,ref,alt,qual,filter_val,info,format_val,gt_ad])
-    
-    output_VCF = "{}.vcf".format(sample_id)
-    with open(output_VCF, 'w') as vcf:
+
+    zygos = row["V1_zygosity"].strip()
+    if zygos in ["het", "Het", "heterozygous", "Heterozygous"]:
+        GT = "0/1"
+    elif zygos in ["hom", "Hom", "homozygous", "Homozygous"]:
+        GT = "1/1"
+    else:
+        print(f"Zygosity is not valid for row index: {index}")
+        continue
+
+    gt_ad = f"{GT}:{AD}"
+
+    info = 'V1_evidence="{}"'.format(row["V1_evidence"])
+
+    record = "\t".join([chrom, pos, ID, ref, alt, QUAL, FILTER, info,
+                        FORMAT, gt_ad])
+
+    output_VCF = f"{sample_id}.vcf"
+    with open(output_VCF, "w", encoding="UTF-8") as vcf:
         vcf.write(vcf_header+record)
-
-    
-    
-    
-        
-        
-        
-        
-    
-    
-  
-    
-
-
-
