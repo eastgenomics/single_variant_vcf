@@ -1,1 +1,0 @@
-# single_variant_vcf
