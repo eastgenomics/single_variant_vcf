@@ -98,11 +98,10 @@ def get_zygosity(r_index, row_data):
     if row_data in ["hom", "Hom", "homozygous", "Homozygous"]:
         return "1/1"
     raise ValueError(f"Zygosity is not valid for row index: {r_index}")
-    
+
 
 # Loop and parse out variants in the excel and export in VCF format
 for index, row in df.iterrows():
-    
     g_build = row["Genome_build"].strip()
     # At the moment only accepting b37
     if g_build in ["GRCh37"]:
