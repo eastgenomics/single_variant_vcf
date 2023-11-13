@@ -7,7 +7,7 @@ import pandas as pd
 df = pd.read_excel(sys.argv[1], dtype=str, engine="odf")
 
 # Define static elements of the VCF
-VCF_HEADER = """##fileformat=VCFv4.2
+B37_HEADER = """##fileformat=VCFv4.2
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##INFO=<ID=V1_evidence,Number=.,Type=String,Description="Free text from scientists">
 ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
@@ -36,68 +36,101 @@ VCF_HEADER = """##fileformat=VCFv4.2
 ##contig=<ID=X,length=155270560,assembly=b37>
 ##contig=<ID=Y,length=59373566,assembly=b37>
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT"""
+
+B38_HEADER = """##fileformat=VCFv4.2
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=V1_evidence,Number=.,Type=String,Description="Free text from scientists">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##contig=<ID=chr1,length=248956422,assembly=hg38>
+##contig=<ID=chr2,length=242193529,assembly=hg38>
+##contig=<ID=chr3,length=198295559,assembly=hg38>
+##contig=<ID=chr4,length=190214555,assembly=hg38>
+##contig=<ID=chr5,length=181538259,assembly=hg38>
+##contig=<ID=chr6,length=170805979,assembly=hg38>
+##contig=<ID=chr7,length=159345973,assembly=hg38>
+##contig=<ID=chr8,length=145138636,assembly=hg38>
+##contig=<ID=chr9,length=138394717,assembly=hg38>
+##contig=<ID=chr10,length=133797422,assembly=hg38>
+##contig=<ID=chr11,length=135086622,assembly=hg38>
+##contig=<ID=chr12,length=133275309,assembly=hg38>
+##contig=<ID=chr13,length=114364328,assembly=hg38>
+##contig=<ID=chr14,length=107043718,assembly=hg38>
+##contig=<ID=chr15,length=101991189,assembly=hg38>
+##contig=<ID=chr16,length=90338345,assembly=hg38>
+##contig=<ID=chr17,length=83257441,assembly=hg38>
+##contig=<ID=chr18,length=80373285,assembly=hg38>
+##contig=<ID=chr19,length=58617616,assembly=hg38>
+##contig=<ID=chr20,length=64444167,assembly=hg38>
+##contig=<ID=chr21,length=46709983,assembly=hg38>
+##contig=<ID=chr22,length=50818468,assembly=hg38>
+##contig=<ID=chrX,length=156040895,assembly=hg38>
+##contig=<ID=chrY,length=57227415,assembly=hg38>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT"""
+
+HEADER_DICT = {"GRCh37":B37_HEADER, "GRCh38":B38_HEADER}
+
 ID = QUAL = FILTER = "."
 FORMAT = "GT:AD"
 AD = "0,0"
 
 # Regex pattern for extracting chrom,pos,ref,alt
-PATTERN = r"(1[0-9]?|2[0-2]?|X|Y):(\d+):([ACGT]+):([ACGT]+)"
+PATTERN = r"([1-9]?|1[0-9]?|2[0-2]?|X|Y):(\d+):([ACGT]+):([ACGT]+)"
 
+
+# Define functions
+
+def get_variant(r_index, row_data):
+    """Parses and checks variant information from input"""
+    result = re.search(PATTERN, row_data)
+    if result is not None:
+        if len(result[3]) > 1 and len(result[4]) > 1:
+            raise ValueError(
+                f"REF/ALT are not valid for row index: {r_index}") 
+        return result
+    raise ValueError(
+        f"Variant notation is not valid for row index: {r_index}")
+
+def get_zygosity(r_index, row_data):
+    """Parses and checks zygosity from input"""
+    if row_data in ["het", "Het", "heterozygous", "Heterozygous"]:
+        return "0/1"
+    if row_data in ["hom", "Hom", "homozygous", "Homozygous"]:
+        return "1/1"
+    raise ValueError(f"Zygosity is not valid for row index: {r_index}")
+    
 # Loop and parse out variants in the excel and export in VCF format
 for index, row in df.iterrows():
+    
+    g_build = row["Genome_build"].strip()
+    # At the moment only accepting b37
+    if g_build in ["GRCh37"]:    
+        vcf_header = HEADER_DICT[g_build]
+    else:
+        raise ValueError(
+            f"The genome build is not valid for row index: {index}")
 
     if pd.isna(row["Participant_ID"]):
-        print(f"The sample ID could not be found for row index: {index}")
-        continue
+        raise ValueError(
+            f"The sample ID could not be found for row index: {index}")
 
     sample_id = row["Participant_ID"].strip()
-    vcf_header = f"{VCF_HEADER}\t{sample_id}\n"
+    vcf_header = f"{vcf_header}\t{sample_id}\n"
 
-    variant = row["V1"].strip()
-    result = re.search(PATTERN, variant)
-    try:
-        chrom = result[1]
-    except TypeError:
-        print(f"CHROM could not be found for row index: {index}")
-        continue
-    try:
-        pos = result[2]
-    except TypeError:
-        print(f"POS could not be found for row index: {index}")
-        continue
-
-    try:
-        ref = result[3]
-    except TypeError:
-        print(f"REF could not be found for row index: {index}")
-        continue
-
-    try:
-        alt = result[4]
-    except TypeError:
-        print(f"ALT could not be found for row index: {index}")
-        continue
-
-    if len(ref) > 1 and len(alt) > 1:
-        print(f"REF/ALT are not valid for row index: {index}")
-        continue
-
-    zygos = row["V1_zygosity"].strip()
-    if zygos in ["het", "Het", "heterozygous", "Heterozygous"]:
-        GT = "0/1"
-    elif zygos in ["hom", "Hom", "homozygous", "Homozygous"]:
-        GT = "1/1"
-    else:
-        print(f"Zygosity is not valid for row index: {index}")
-        continue
-
+    variant = get_variant(index, row["V1"].strip())
+    chrom = variant[1]
+    pos = variant[2]
+    ref = variant[3]
+    alt = variant[4]
+    
+    GT = get_zygosity(index, row["V1_zygosity"].strip())
     gt_ad = f"{GT}:{AD}"
 
     info = 'V1_evidence="{}"'.format(row["V1_evidence"])
 
-    record = "\t".join([chrom, pos, ID, ref, alt, QUAL, FILTER, info,
+    RECORD = "\t".join([chrom, pos, ID, ref, alt, QUAL, FILTER, info,
                         FORMAT, gt_ad])
 
-    output_VCF = f"{sample_id}.vcf"
-    with open(output_VCF, "w", encoding="UTF-8") as vcf:
-        vcf.write(vcf_header+record)
+    output_vcf = f"{sample_id}.vcf"
+    with open(output_vcf, "w", encoding="UTF-8") as vcf:
+        vcf.write(vcf_header+RECORD)
+        
