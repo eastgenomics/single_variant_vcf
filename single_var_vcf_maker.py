@@ -67,7 +67,7 @@ B38_HEADER = """##fileformat=VCFv4.2
 ##contig=<ID=chrY,length=57227415,assembly=hg38>
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT"""
 
-HEADER_DICT = {"GRCh37":B37_HEADER, "GRCh38":B38_HEADER}
+HEADER_DICT = {"GRCh37": B37_HEADER, "GRCh38": B38_HEADER}
 
 ID = QUAL = FILTER = "."
 FORMAT = "GT:AD"
@@ -85,10 +85,11 @@ def get_variant(r_index, row_data):
     if result is not None:
         if len(result[3]) > 1 and len(result[4]) > 1:
             raise ValueError(
-                f"REF/ALT are not valid for row index: {r_index}") 
+                f"REF/ALT are not valid for row index: {r_index}")
         return result
     raise ValueError(
         f"Variant notation is not valid for row index: {r_index}")
+
 
 def get_zygosity(r_index, row_data):
     """Parses and checks zygosity from input"""
@@ -98,6 +99,7 @@ def get_zygosity(r_index, row_data):
         return "1/1"
     raise ValueError(f"Zygosity is not valid for row index: {r_index}")
     
+
 # Loop and parse out variants in the excel and export in VCF format
 for index, row in df.iterrows():
     
@@ -121,7 +123,7 @@ for index, row in df.iterrows():
     pos = variant[2]
     ref = variant[3]
     alt = variant[4]
-    
+
     GT = get_zygosity(index, row["V1_zygosity"].strip())
     gt_ad = f"{GT}:{AD}"
 
@@ -133,4 +135,4 @@ for index, row in df.iterrows():
     output_vcf = f"{sample_id}.vcf"
     with open(output_vcf, "w", encoding="UTF-8") as vcf:
         vcf.write(vcf_header+RECORD)
-        
+    
