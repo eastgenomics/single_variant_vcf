@@ -105,7 +105,7 @@ for index, row in df.iterrows():
     
     g_build = row["Genome_build"].strip()
     # At the moment only accepting b37
-    if g_build in ["GRCh37"]:    
+    if g_build in ["GRCh37"]:
         vcf_header = HEADER_DICT[g_build]
     else:
         raise ValueError(
@@ -135,4 +135,3 @@ for index, row in df.iterrows():
     output_vcf = f"{sample_id}.vcf"
     with open(output_vcf, "w", encoding="UTF-8") as vcf:
         vcf.write(vcf_header+RECORD)
-    
