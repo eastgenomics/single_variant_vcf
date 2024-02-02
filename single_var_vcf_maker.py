@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-
+"""Generate VCF for each vairant in spreadsheet"""
 import re
-import sys
+import argparse
 import pandas as pd
-
-df = pd.read_excel(sys.argv[1], dtype=str, engine="odf")
 
 # Define static elements of the VCF
 B37_HEADER = """##fileformat=VCFv4.2
@@ -77,11 +74,81 @@ AD = "0,0"
 PATTERN = r"([1-9]?|1[0-9]?|2[0-2]?|X|Y):(\d+):([ACGT]+):([ACGT]+)"
 
 
-# Define functions
+def parse_args():
+    """
+    Parse arguments given at cmd line.
 
-def get_variant(r_index, row_data):
-    """Parses and checks variant information from input"""
+    Returns:
+        - args (Namespace): object containing parsed arguments.
+    """
+
+    parser = argparse.ArgumentParser(
+        description="Generate VCF file for each variant"
+    )
+
+    parser.add_argument(
+        '-i', '--input',
+        help="Name of input spreadsheet containing variant information",
+        required=True,
+        type=str
+    )
+
+    parser.add_argument(
+        '-g', '--genome',
+        help="Name of column in the input spreadsheet containing genome build",
+        default="Genome_build",
+        type=str
+    )
+
+    parser.add_argument(
+        '-p', '--participant',
+        help="Name of column in the input spreadsheet containing participant\
+            ID",
+        default="Participant_ID",
+        type=str
+    )
+
+    parser.add_argument(
+        '-v', '--variant',
+        help="Name of column in the input spreadsheet containing variant\
+            description",
+        default="V1",
+        type=str
+    )
+
+    parser.add_argument(
+        '-z', '--zygosity',
+        help="Name of column in the input spreadsheet containing zygosity\
+            description",
+        default="V1_zygosity",
+        type=str
+    )
+
+    parser.add_argument(
+        '-e', '--evidence',
+        help="Name of column in the input spreadsheet containing\
+            additional information for the assertion of pathogenicity",
+        default="V1_evidence",
+        type=str
+    )
+
+    args = parser.parse_args()
+    return args
+
+
+def get_variant(r_index: int, row_data: pd.Series) -> re.Match:
+    """
+    Parses and checks variant information from input
+
+    Raises:
+        ValueError: if REF/ALT values are invalid
+        ValueError: if variant notation is invalid
+
+    Returns:
+        re.Match: Regex match object containing chrom, pos, ref and alt values
+    """
     result = re.search(PATTERN, row_data)
+    print(row_data, result[0], result[1])
     if result is not None:
         if len(result[3]) > 1 and len(result[4]) > 1:
             raise ValueError(
@@ -91,46 +158,91 @@ def get_variant(r_index, row_data):
         f"Variant notation is not valid for row index: {r_index}")
 
 
-def get_zygosity(r_index, row_data):
-    """Parses and checks zygosity from input"""
-    if row_data in ["het", "Het", "heterozygous", "Heterozygous"]:
+def get_zygosity(r_index: int, row_data: pd.Series) -> str:
+    """
+    Parses and checks zygosity from input
+
+    Raises:
+        ValueError: if zygosity is note valid
+
+    Returns:
+        str: zygosity value
+    """
+    if row_data.lower() in ["heterozygous", "het"]:
         return "0/1"
-    if row_data in ["hom", "Hom", "homozygous", "Homozygous"]:
+    if row_data.lower() in ["homozygous", "hom"]:
         return "1/1"
     raise ValueError(f"Zygosity is not valid for row index: {r_index}")
 
 
-# Loop and parse out variants in the excel and export in VCF format
-for index, row in df.iterrows():
-    g_build = row["Genome_build"].strip()
-    # At the moment only accepting b37
-    if g_build in ["GRCh37"]:
-        vcf_header = HEADER_DICT[g_build]
-    else:
-        raise ValueError(
-            f"The genome build is not valid for row index: {index}")
+def make_vcf(df: pd.DataFrame, genome_build_col: str, participant_id_col: str,
+             variant_col: str, zygosity_col: str, evidence_col: str):
+    """
+    Loop over and parse out variants in the excel and export in VCF format
+    Args:
+        df (pd.DataFrame): dataframe object of input spreadsheet
+        participant_id_col (str): name of column containing participant IDs
+        variant_col (str): name of column containing variant description
+        zygosity_col (str): name of column containing zygosity description
+        evidence_col (str): name of column containing additional information
+            for the assertion of pathogenicity
 
-    if pd.isna(row["Participant_ID"]):
-        raise ValueError(
-            f"The sample ID could not be found for row index: {index}")
+    Raises:
+        ValueError: if genome build is not valid
+        ValueError: if participant ID cannot not be found
 
-    sample_id = row["Participant_ID"].strip()
-    vcf_header = f"{vcf_header}\t{sample_id}\n"
+    Outputs:
+        VCF file containing single variant
+    """
+    for index, row in df.iterrows():
+        genome_build = row[genome_build_col].strip()
+        if genome_build in HEADER_DICT.keys():
+            vcf_header = HEADER_DICT[genome_build]
+        else:
+            raise ValueError(
+                f"The genome build is not valid for row index: {index}"
+            )
 
-    variant = get_variant(index, row["V1"].strip())
-    chrom = variant[1]
-    pos = variant[2]
-    ref = variant[3]
-    alt = variant[4]
+        if pd.isna(row[participant_id_col]):
+            raise ValueError(
+                f"The participant ID could not be found for row index: {index}"
+            )
 
-    GT = get_zygosity(index, row["V1_zygosity"].strip())
-    gt_ad = f"{GT}:{AD}"
+        participant_id = row[participant_id_col].strip()
+        vcf_header = f"{vcf_header}\t{participant_id}\n"
 
-    info = 'V1_evidence="{}"'.format(row["V1_evidence"])
+        variant = get_variant(index, row[variant_col].strip())
+        chrom = variant[1]
+        pos = variant[2]
+        ref = variant[3]
+        alt = variant[4]
 
-    RECORD = "\t".join([chrom, pos, ID, ref, alt, QUAL, FILTER, info,
-                        FORMAT, gt_ad])
+        gt = get_zygosity(index, row[zygosity_col].strip())
+        gt_ad = f"{gt}:{AD}"
 
-    output_vcf = f"{sample_id}.vcf"
-    with open(output_vcf, "w", encoding="UTF-8") as vcf:
-        vcf.write(vcf_header+RECORD)
+        info = f'V1_evidence="{row[evidence_col]}"'
+
+        record = "\t".join([chrom, pos, ID, ref, alt, QUAL, FILTER, info,
+                            FORMAT, gt_ad])
+
+        output_vcf = f"{participant_id}_{genome_build}.vcf"
+        with open(output_vcf, "w", encoding="UTF-8") as vcf:
+            vcf.write(vcf_header+record)
+
+
+def main():
+    """Main function to generate VCF for each vairant in spreadsheet"""
+    args = parse_args()
+    df = pd.read_excel(args.input, dtype=str, engine="odf")
+    make_vcf(
+        df=df,
+        genome_build_col=args.genome,
+        participant_id_col=args.participant,
+        variant_col=args.variant,
+        zygosity_col=args.zygosity,
+        evidence_col=args.evidence
+    )
+
+
+if __name__ == "__main__":
+    main()
