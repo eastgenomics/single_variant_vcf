@@ -1,4 +1,4 @@
-"""Generate VCF for each vairant in spreadsheet"""
+"""Generate VCF for each variant in spreadsheet"""
 import re
 import argparse
 import pandas as pd
@@ -148,7 +148,6 @@ def get_variant(r_index: int, row_data: pd.Series) -> re.Match:
         re.Match: Regex match object containing chrom, pos, ref and alt values
     """
     result = re.search(PATTERN, row_data)
-    print(row_data, result[0], result[1])
     if result is not None:
         if len(result[3]) > 1 and len(result[4]) > 1:
             raise ValueError(
@@ -231,7 +230,7 @@ def make_vcf(df: pd.DataFrame, genome_build_col: str, participant_id_col: str,
 
 
 def main():
-    """Main function to generate VCF for each vairant in spreadsheet"""
+    """Main function to generate VCF for each variant in spreadsheet"""
     args = parse_args()
     df = pd.read_excel(args.input, dtype=str, engine="odf")
     make_vcf(
